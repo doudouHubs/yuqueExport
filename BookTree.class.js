@@ -23,8 +23,16 @@ class BookTree {
         let doc = this.bookJson.find(item => {
             return item.doc_id === fileId;
         })
+        
+        if (doc) {
+            let filePath = this.getFolderRelPath(doc);
+            if (doc.child_uuid) {
+                filePath = `${filePath}/${doc.title}`
+            }
+            return filePath;
+        }
 
-        return doc ? this.getFolderRelPath(doc) : '';
+        return '';
     }
 
     /**

@@ -1,13 +1,14 @@
 const log4js = require("log4js");
-const { readdir, readFile, writeFile, mkdir } = require('node:fs/promises');
+const { readdir, readFile, appendFile, writeFile, mkdir } = require('node:fs/promises');
 const TurndownService = require('turndown')
 const { gfm, tables, strikethrough } = require('joplin-turndown-plugin-gfm')
 const fs = require('fs');
+const os = require('os');
 const path = require('path')
 const BookTree = require('./BookTree.class');
 
 var turndownService = new TurndownService()
-// turndownService.use(gfm)
+turndownService.use(gfm)
 // Use the table and strikethrough plugins only
 turndownService.use([tables, strikethrough])
 /**
@@ -22,8 +23,12 @@ class BookLib {
     // 书本列表
     booklist = [];
     name = '';
-    dest = './docs'
-    output = './output'
+    dest = './docs';
+    output = './output';
+    // 链接类型文档
+    LinkFile = '未导出-链接文档.md';
+    // 未导出文档
+    notExport = '未导出文档列表.md'
 
     constructor(options = { name: '', dest: '', output: '' }) {
         this.initilize(options);
@@ -34,14 +39,8 @@ class BookLib {
             this[key] = options[key]
         };
 
-        log4js.shutdown()
-        log4js.configure({
-            appenders: { booklib: { type: "file", filename: `./Log/${this.name}.log` } },
-            categories: { default: { appenders: ["booklib"], level: "all" } },
-        });
-        this.logger = log4js.getLogger(this.name);
+        this.logger = log4js.getLogger('export');
         this.logger.info(`导出知识库：${this.name}`);
-
     }
 
 
@@ -70,6 +69,10 @@ class BookLib {
         await mkdir(`${this.output}/${this.name}`);
 
         for (const book of this.bookTree.bookJson) {
+            if (book.type === 'LINK') {
+                await this.writeToLinkFile(book)
+            }
+
             // 有子集的为文件夹
             if (!book.child_uuid) continue;
 
@@ -103,17 +106,35 @@ class BookLib {
         // 读取 JSON 文件
         const data = JSON.parse(await readFile(fileJson, { encoding: 'utf-8' }));
         if (data.doc.type !== 'Doc' && data.doc.type !== 'DOC') {
-
+            await this.writeToNotExportFile(data.doc)
             return
         }
         // 转换为 Markdown
         let markdown = turndownService.turndown(data.doc.body || data.doc.body_draft);
         let mdName = data.doc.title.replace(/\/|\\/g, '-');
         let fileMd = path.join(`${this.output}/${dir}`, this.bookTree.getFilePath(data.doc.id) || mdName);
+        // 去除多出来的斜杠\
+        markdown = markdown.replace(/\\/g, '')
         // 写入 Markdown 文件
         writeFile(fileMd + '.md', markdown);
 
         this.logger.info('导出文档：' + `${fileJson} => ${fileMd}.md`);
+    }
+
+    /**
+     * @description: 写入链接文档
+     */
+    writeToLinkFile(doc) {
+        let content = `[LINK] ${doc.title}：${doc.url} \n\n`
+        return appendFile(`${this.output}/${this.name}/${this.LinkFile}`, content)
+    }
+
+    /**
+     * @description: 写入未导出文档
+     */
+    writeToNotExportFile(doc) {
+        let content = `[${doc.type}] ${doc.title} \n\n`;
+        return appendFile(`${this.output}/${this.name}/${this.notExport}`, content)
     }
 }
 

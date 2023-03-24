@@ -31,6 +31,7 @@ class YuqueTranformer {
             await bookLib.exportAllDocs();
         }
         logger.info('所有知识库导出完毕');
+        console.log('所有知识库导出完毕');
     }
 
     async initFolder() {
