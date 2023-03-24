@@ -1,16 +1,22 @@
 const log4js = require("log4js");
-const { readdir, readFile, appendFile, writeFile, mkdir } = require('node:fs/promises');
+const { readdir, readFile, appendFile, writeFile, mkdir, lstat, rmdir } = require('node:fs/promises');
 const TurndownService = require('turndown')
 const { gfm, tables, strikethrough } = require('joplin-turndown-plugin-gfm')
 const fs = require('fs');
-const os = require('os');
 const path = require('path')
 const BookTree = require('./BookTree.class');
 
-var turndownService = new TurndownService()
+var turndownService = new TurndownService({ codeBlockStyle: 'fenced' })
 turndownService.use(gfm)
 // Use the table and strikethrough plugins only
 turndownService.use([tables, strikethrough])
+turndownService.addRule('strikethrough', {
+    filter: ['pre'],
+    replacement: function (content, node) {
+        let lang = node.getAttribute('data-language')
+        return '```' + lang + '\n' + content + '\n```'
+    }
+})
 /**
  * @description: 知识库对象，可获取包含书籍目录，课本信息
  * @return {*}
@@ -28,7 +34,7 @@ class BookLib {
     // 链接类型文档
     LinkFile = '未导出-链接文档.md';
     // 未导出文档
-    notExport = '未导出文档列表.md'
+    notExport = '未导出-其他文档.md'
 
     constructor(options = { name: '', dest: '', output: '' }) {
         this.initilize(options);
@@ -96,6 +102,7 @@ class BookLib {
 
             await this.html2md(filename);
         }
+        await this.deleteEmptyDirs(`${this.output}/${this.name}`)
         this.logger.info('所有文档导出完毕');
     }
 
@@ -125,7 +132,10 @@ class BookLib {
      * @description: 写入链接文档
      */
     writeToLinkFile(doc) {
-        let content = `[LINK] ${doc.title}：${doc.url} \n\n`
+        let mdName = doc.title.replace(/\/|\\/g, '-');
+        let filePath = path.join(`${this.name}`, this.bookTree.getFilePath(doc.id) || mdName)
+        let content = `[LINK] ${filePath}：${doc.url} \n\n`
+
         return appendFile(`${this.output}/${this.name}/${this.LinkFile}`, content)
     }
 
@@ -133,8 +143,32 @@ class BookLib {
      * @description: 写入未导出文档
      */
     writeToNotExportFile(doc) {
-        let content = `[${doc.type}] ${doc.title} \n\n`;
+        let mdName = doc.title.replace(/\/|\\/g, '-');
+        let filePath = path.join(`${this.name}`, this.bookTree.getFilePath(doc.id) || mdName)
+        let content = `[${doc.type}] ${filePath} \n\n`;
+
         return appendFile(`${this.output}/${this.name}/${this.notExport}`, content)
+    }
+
+    /**
+     * @description: 清理空文件夹
+     * @param {*} directory
+     */
+    async deleteEmptyDirs(directory) {
+        let files = await readdir(directory);
+
+        for (const file of files) {
+            const filePath = path.join(directory, file);
+
+            let stat = await lstat(filePath)
+            if (stat.isDirectory()) {
+                await this.deleteEmptyDirs(filePath);
+            }
+        }
+
+        if (files.length === 0) {
+            await rmdir(directory);
+        }
     }
 }
 
