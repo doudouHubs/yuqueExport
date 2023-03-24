@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "joplin-turndown-plugin-gfm": "^1.0.12",
+    "js-yaml": "^4.1.0",
+    "log4js": "^6.9.1",
+    "turndown": "^7.1.2",
+    "turndown-plugin-gfm": "^1.0.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "build": "node export.js"
+  }
+}
